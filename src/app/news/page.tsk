@@ -1,0 +1,24 @@
+export default async function News() {
+  const res = await fetch('https://newsapi.org/v2/top-headlines?category=business&apiKey=a06ac1a29bca4afe8d3f8d4fb567f670&language=en&sortBy=publishedAt&pageSize=10');
+  const { articles } = await res.json();
+
+  return (
+    <main className="min-h-screen bg-black text-white pt-24 py-20 px-4">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-6xl font-bold mb-20 text-center bg-gradient-to-r from-gold to-yellow-400 bg-clip-text text-transparent">
+          Latest News
+        </h1>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {articles.map((article, i) => (
+            <a key={i} href={article.url} target="_blank" className="group bg-white/5 p-8 rounded-3xl backdrop-blur border border-white/10 hover:shadow-2xl hover:-translate-y-2 transition-all">
+              <img src={article.urlToImage || '/news-placeholder.jpg'} alt={article.title} className="w-full h-48 object-cover rounded-2xl mb-6 group-hover:scale-105 transition-transform" />
+              <h2 className="text-2xl font-bold mb-4 line-clamp-2 group-hover:text-gold">{article.title}</h2>
+              <p className="text-white/80 mb-6 line-clamp-2">{article.description}</p>
+              <span className="text-gold font-bold text-sm uppercase tracking-wide">{article.source.name}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}

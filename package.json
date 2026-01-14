@@ -6,12 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "export": "next build && next export"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
+    "@headlessui/react": "^2.2.9",
+    "@sanity/image-url": "^2.0.2",
+    "lucide-react": "^0.562.0",
     "next": "16.1.1",
+    "razorpay": "^2.9.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-hook-form": "^7.71.0",
+    "react-razorpay": "^3.0.1",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
