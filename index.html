@@ -1,25 +1,1247 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Thrive with Kaushik</title>
-  <meta name="viewport" content="width=device-width">
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THRIVE WITH KAUSHIK - Professional Coaching and Consulting</title>
+
+    <!-- BUG 1 FIXED: production.min.js → development.js (Babel needs dev build) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=Source+Sans+Pro:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Source Sans Pro',sans-serif;background:#f8f9fa}
+        .modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px;animation:fadeIn .3s}
+        .modal-content{background:white;border-radius:20px;max-width:700px;width:100%;max-height:90vh;overflow-y:auto;padding:40px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+        .modal-close{position:absolute;top:20px;right:20px;background:#f0f0f0;border:none;width:44px;height:44px;border-radius:50%;cursor:pointer;font-size:24px;transition:all .3s;line-height:1}
+        .modal-close:hover{background:#e0e0e0;transform:rotate(90deg)}
+        .social-float{position:fixed;right:20px;top:50%;transform:translateY(-50%);z-index:999;display:flex;flex-direction:column;gap:12px}
+        .social-btn{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;text-decoration:none;box-shadow:0 4px 12px rgba(0,0,0,.25);font-weight:bold;transition:all .3s;font-size:18px}
+        .social-btn:hover{transform:translateX(-10px) scale(1.1)}
+        .pwd-container{position:relative}
+        .pwd-toggle{position:absolute;right:14px;top:50%;transform:translateY(-50%);cursor:pointer;background:none;border:none;font-size:20px;padding:4px;line-height:1}
+        .ai-widget{position:fixed;bottom:24px;left:24px;z-index:998;display:flex;flex-direction:column;gap:12px}
+        .ai-btn{width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;font-size:26px;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:all .3s;display:flex;align-items:center;justify-content:center}
+        .ai-btn:hover{transform:scale(1.15)}
+        .ai-panel{position:fixed;bottom:100px;left:24px;width:340px;background:white;border-radius:20px;box-shadow:0 8px 40px rgba(0,0,0,.2);overflow:hidden;z-index:999;animation:fadeIn .3s}
+        .ai-panel-header{padding:16px 20px;display:flex;justify-content:space-between;align-items:center;color:white}
+        .ai-panel-body{padding:20px}
+        .ai-messages{height:200px;overflow-y:auto;margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
+        .ai-msg{padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.5;max-width:85%}
+        .ai-msg.user{background:#1a472a;color:white;align-self:flex-end}
+        .ai-msg.agent{background:#f0f4f0;color:#333;align-self:flex-start}
+        .ai-input-row{display:flex;gap:8px}
+        .ai-input-row input{flex:1;padding:10px 14px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px}
+        .ai-input-row button{padding:10px 16px;border:none;border-radius:10px;cursor:pointer;font-size:18px}
+        .pulse{animation:pulse 2s infinite}
+        @keyframes pulse{0%,100%{box-shadow:0 4px 16px rgba(0,0,0,.25)}50%{box-shadow:0 4px 24px rgba(99,102,241,.5)}}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @media(max-width:768px){.social-float{display:none}.ai-panel{width:calc(100vw - 48px)}}
+    </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-    const { useState } = React;
-    function App() {
-      return (
-        <div style={{padding: '20px', fontFamily: 'sans-serif'}}>
-          <h1>🚀 Thrive with Kaushik LIVE!</h1>
-          <p>Full site deployed. Visit <a href="/contact">Contact</a> | <a href="/news">News</a></p>
-        </div>
-      );
-    }
-    ReactDOM.render(<App />, document.getElementById('root'));
-  </script>
+    <!-- BUG 2 FIXED: portal target kept but social now rendered inline to avoid portal crash -->
+    <div id="socialButtons"></div>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, createContext, useContext } = React;
+        const AppContext = createContext();
+        const useApp = () => useContext(AppContext);
+
+        /* ── UTILITIES ─────────────────────────────────────── */
+        const enc = d => { try { return btoa(unescape(encodeURIComponent(JSON.stringify(d)))); } catch { return null; } };
+        const dec = s => { try { return JSON.parse(decodeURIComponent(escape(atob(s)))); } catch { return null; } };
+
+        const validatePassword = pw => {
+            const ok = pw.length >= 9 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /[0-9]/.test(pw) && /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw);
+            const msg = pw.length < 9 ? 'Min 9 chars' : !/[A-Z]/.test(pw) ? 'Add uppercase' : !/[a-z]/.test(pw) ? 'Add lowercase' : !/[0-9]/.test(pw) ? 'Add number' : !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw) ? 'Add special char (!@#$...)' : 'Strong ✓';
+            return { isValid: ok, msg };
+        };
+
+        /* ── DEFAULT DATA ───────────────────────────────────── */
+        const defaultData = () => ({
+            config: {
+                siteName: 'THRIVE WITH KAUSHIK',
+                logo: '🌟',
+                logoImage: '',
+                colors: { primary: '#1a472a', secondary: '#d4af37', accent: '#e74c3c' },
+                contact: { mobile: '9953715382', email: 'thrivewithkaushik@gmail.com' },
+                social: {
+                    facebook:  { enabled: true,  url: 'https://facebook.com/thrivewithkaushik',  icon: 'f',  color: '#1877f2', label: 'Facebook'  },
+                    instagram: { enabled: true,  url: 'https://instagram.com/thrivewithkaushik', icon: '📷', color: '#E4405F', label: 'Instagram' },
+                    twitter:   { enabled: true,  url: 'https://twitter.com/thrivewithkaushik',   icon: '𝕏',  color: '#111',    label: 'Twitter'   },
+                    linkedin:  { enabled: true,  url: 'https://linkedin.com/in/thrivewithkaushik', icon: 'in', color: '#0077b5', label: 'LinkedIn' },
+                    whatsapp:  { enabled: true,  url: 'https://wa.me/919953715382',              icon: '💬', color: '#25D366', label: 'WhatsApp' }
+                },
+                blogUrl: 'https://thrivewithkaushik.blogspot.com'
+            },
+            elevenLabs: {
+                apiKey: '',
+                agents: [
+                    { id: 'sales',        label: '🛒 Sales Agent',        voiceId: 'JBFqnCBsd6RMkjVDRZzb', enabled: false, agentId: '', color: '#6366f1', greeting: 'Hi! I am your Sales Agent. How can I help you today?' },
+                    { id: 'support',      label: '🎧 Support Agent',      voiceId: 'JBFqnCBsd6RMkjVDRZzb', enabled: false, agentId: '', color: '#0ea5e9', greeting: 'Hello! I am your Support Agent. What do you need help with?' },
+                    { id: 'mindfulness',  label: '🧘 Mindfulness Coach',  voiceId: 'JBFqnCBsd6RMkjVDRZzb', enabled: false, agentId: '', color: '#8b5cf6', greeting: 'Welcome 🙏 I am your Mindfulness Coach. How are you feeling today?' }
+                ]
+            },
+            paymentGateways: [
+                { id: 1, name: 'Razorpay',   enabled: true,  apiKey: '', icon: '💳' },
+                { id: 2, name: 'PayU',        enabled: false, apiKey: '', icon: '💰' },
+                { id: 3, name: 'PayPal',      enabled: false, apiKey: '', icon: 'P'  },
+                { id: 4, name: 'Paytm',       enabled: false, apiKey: '', icon: '📱' },
+                { id: 5, name: 'Google Pay',  enabled: false, apiKey: '', icon: 'G'  },
+                { id: 6, name: 'Net Banking', enabled: false, apiKey: '', icon: '🏦' }
+            ],
+            enquiryTypes: ['Motivational Speaking','Life Coaching','Stress Management','Business Coaching','General Enquiry','Feedback','Complaint'],
+            services: [
+                { id: 1, title: 'Motivational Speaking', price: 50000, originalPrice: 60000, image: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=800', mode: 'Both',   description: 'Transform organizations with powerful keynotes', enabled: true  },
+                { id: 2, title: 'Business Coaching',     price: 25000, originalPrice: 30000, image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=800', mode: 'Online', description: 'Strategic growth coaching for leaders',          enabled: true  },
+                { id: 3, title: 'Life Coaching',         price: 15000, originalPrice: 18000, image: 'https://images.unsplash.com/photo-1544027993-37dbfe43562a?w=800', mode: 'Both',   description: 'Find purpose and live with intention',          enabled: true  },
+                { id: 4, title: 'Stress Management',     price: 12000, originalPrice: 15000, image: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800', mode: 'Online', description: 'Tools to thrive under pressure',              enabled: true  }
+            ],
+            products: [
+                { id: 101, title: 'Success Mindset Book', price: 799,  originalPrice: 999,  stock: 50,  image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=800', enabled: true },
+                { id: 102, title: 'Motivation Canvas',    price: 2499, originalPrice: 3499, stock: 15,  image: 'https://images.unsplash.com/photo-1561214115-f2f134cc4912?w=800', enabled: true },
+                { id: 103, title: 'Thrive T-Shirt',       price: 699,  originalPrice: 899,  stock: 100, image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=800', enabled: true }
+            ],
+            users: [],
+            orders: [],
+            enquiries: []
+        });
+
+        const loadData = () => {
+            try {
+                const raw = localStorage.getItem('thriveV3');
+                if (raw) { const d = dec(raw); if (d) return d; }
+            } catch (_) {}
+            return defaultData();
+        };
+
+        /* ══════════════════════════════════════════════════════
+           MAIN APP
+        ══════════════════════════════════════════════════════ */
+        function App() {
+            const [data, setData]               = useState(loadData);
+            const [page, setPage]               = useState('home');
+            const [cart, setCart]               = useState([]);
+            const [currentUser, setCurrentUser] = useState(null);
+            const [isAdmin, setIsAdmin]         = useState(false);
+            const [adminIn, setAdminIn]         = useState(false);
+            const [showAuth, setShowAuth]       = useState(false);
+            const [showCart, setShowCart]       = useState(false);
+            const [showPay, setShowPay]         = useState(false);
+
+            // Save encrypted whenever data changes
+            useEffect(() => { try { localStorage.setItem('thriveV3', enc(data)); } catch(_) {} }, [data]);
+
+            const updateData = (key, val) => setData(p => ({ ...p, [key]: val }));
+
+            const addToCart = item => {
+                setCart(prev => {
+                    const ex = prev.find(i => i.id === item.id);
+                    return ex ? prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i)
+                               : [...prev, { ...item, quantity: 1 }];
+                });
+                alert('✅ Added to cart!');
+            };
+
+            const removeFromCart = id => setCart(p => p.filter(i => i.id !== id));
+            const updateQty      = (id, d) => setCart(p => p.map(i => i.id === id ? { ...i, quantity: Math.max(1, i.quantity + d) } : i));
+            const cartCount      = cart.reduce((s, i) => s + i.quantity, 0);
+
+            const sendNotification = order => {
+                alert(`✅ ORDER CONFIRMED!\nOrder #${order.id}\nTotal: ₹${order.total.toLocaleString()}\n\n📧 Email → ${order.customerEmail}\n📧 Admin → ${data.config.contact.email}\n📱 SMS → ${order.customerMobile}\n📱 Admin → ${data.config.contact.mobile}`);
+            };
+
+            const ctx = {
+                ...data, updateData,
+                page, setPage,
+                cart, setCart, addToCart, removeFromCart, updateQty, cartCount,
+                currentUser, setCurrentUser,
+                isAdmin, setIsAdmin,
+                adminIn, setAdminIn,
+                showAuth, setShowAuth,
+                showCart, setShowCart,
+                showPay, setShowPay,
+                sendNotification
+            };
+
+            return (
+                <AppContext.Provider value={ctx}>
+                    <GStyles />
+                    {/* Social buttons rendered inline (not portal) — BUG 2 FIX */}
+                    <SocialFloat />
+                    {/* ElevenLabs AI widgets */}
+                    <AIAgents />
+                    {isAdmin
+                        ? (adminIn ? <AdminPanel /> : <AdminLogin />)
+                        : <Website />}
+                    {showAuth && <AuthModal />}
+                    {showCart && <CartModal />}
+                    {showPay  && <PayModal  />}
+                </AppContext.Provider>
+            );
+        }
+
+        /* ── GLOBAL CSS ─────────────────────────────────────── */
+        const GStyles = () => {
+            const { config } = useApp();
+            return <style>{`
+                :root{--p:${config.colors.primary};--s:${config.colors.secondary};--a:${config.colors.accent}}
+                h1,h2,h3,h4,h5,h6{font-family:'Playfair Display',serif;font-weight:700;color:var(--p)}
+                .btn{padding:14px 28px;border:none;border-radius:12px;font-weight:600;cursor:pointer;font-size:15px;transition:all .3s}
+                .bp{background:var(--p);color:white}.bp:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(26,71,42,.3)}
+                .bs{background:var(--s);color:var(--p)}
+                .ba{background:var(--a);color:white}
+                .bo{background:white;border:2px solid var(--p);color:var(--p)}
+                .card{background:white;border-radius:16px;padding:28px;box-shadow:0 4px 16px rgba(0,0,0,.08);transition:all .3s}
+                .card:hover{box-shadow:0 12px 40px rgba(0,0,0,.12);transform:translateY(-6px)}
+                .con{max-width:1400px;margin:0 auto;padding:0 24px}
+                .g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:28px}
+                input,textarea,select{width:100%;padding:14px 18px;border:2px solid #e0e0e0;border-radius:12px;font-family:'Source Sans Pro',sans-serif;font-size:15px;transition:all .3s;background:white}
+                input:focus,textarea:focus,select:focus{outline:none;border-color:var(--p);box-shadow:0 0 0 4px rgba(26,71,42,.1)}
+                table{width:100%;border-collapse:collapse}
+                th{padding:14px;text-align:left;border-bottom:2px solid #eee;font-weight:700;background:#f8f9fa;font-size:14px}
+                td{padding:14px;border-bottom:1px solid #f0f0f0;font-size:14px}
+                .tog{position:relative;width:52px;height:28px;background:#ccc;border-radius:14px;cursor:pointer;transition:all .3s;display:inline-block;flex-shrink:0}
+                .tog.on{background:var(--p)}
+                .tog::after{content:'';position:absolute;width:22px;height:22px;background:white;border-radius:50%;top:3px;left:3px;transition:all .3s;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+                .tog.on::after{left:27px}
+                @media(max-width:768px){.g3{grid-template-columns:1fr}}
+            `}</style>;
+        };
+
+        /* ── SOCIAL FLOAT (inline, no portal) ──────────────── */
+        const SocialFloat = () => {
+            const { config } = useApp();
+            const items = Object.entries(config.social || {}).filter(([, v]) => v.enabled);
+            if (!items.length) return null;
+            return (
+                <div className="social-float">
+                    {items.map(([k, v]) => (
+                        <a key={k} href={v.url} target="_blank" rel="noopener noreferrer"
+                           className="social-btn" style={{ background: v.color }} title={v.label}>
+                            {v.icon}
+                        </a>
+                    ))}
+                </div>
+            );
+        };
+
+        /* ══════════════════════════════════════════════════════
+           ELEVENLABS AI AGENTS
+        ══════════════════════════════════════════════════════ */
+        const AIAgents = () => {
+            const { elevenLabs } = useApp();
+            const [open, setOpen]     = useState(null);  // which agent panel is open
+            const [messages, setMessages] = useState({});
+            const [inputs, setInputs]     = useState({});
+            const [speaking, setSpeaking] = useState(false);
+            const audioRef = useRef(null);
+
+            const activeAgents = (elevenLabs?.agents || []).filter(a => a.enabled);
+            if (!activeAgents.length) return null;
+
+            const initMsgs = agent => {
+                if (!messages[agent.id]) {
+                    setMessages(p => ({ ...p, [agent.id]: [{ role: 'agent', text: agent.greeting }] }));
+                }
+            };
+
+            const togglePanel = agent => {
+                if (open === agent.id) { setOpen(null); return; }
+                setOpen(agent.id);
+                initMsgs(agent);
+            };
+
+            const speakText = async (text, agent) => {
+                if (!elevenLabs.apiKey) {
+                    alert('⚠️ ElevenLabs API key not configured.\nGo to Admin → AI Agents to add your key.');
+                    return;
+                }
+                if (speaking) { if (audioRef.current) { audioRef.current.pause(); } setSpeaking(false); return; }
+                setSpeaking(true);
+                try {
+                    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${agent.voiceId}`, {
+                        method: 'POST',
+                        headers: {
+                            'xi-api-key': elevenLabs.apiKey,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            text,
+                            model_id: 'eleven_multilingual_v2',
+                            voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+                        })
+                    });
+                    if (!res.ok) throw new Error('ElevenLabs API error: ' + res.status);
+                    const blob = await res.blob();
+                    const url  = URL.createObjectURL(blob);
+                    audioRef.current = new Audio(url);
+                    audioRef.current.onended = () => setSpeaking(false);
+                    audioRef.current.play();
+                } catch (e) {
+                    setSpeaking(false);
+                    alert('❌ Voice error: ' + e.message);
+                }
+            };
+
+            const sendMessage = async (agent) => {
+                const text = (inputs[agent.id] || '').trim();
+                if (!text) return;
+                const userMsg = { role: 'user', text };
+                setMessages(p => ({ ...p, [agent.id]: [...(p[agent.id] || []), userMsg] }));
+                setInputs(p => ({ ...p, [agent.id]: '' }));
+
+                // If agentId is configured use Conversational AI, else fallback response
+                let replyText = '';
+                if (elevenLabs.apiKey && agent.agentId) {
+                    try {
+                        // ElevenLabs Conversational AI
+                        const res = await fetch(`https://api.elevenlabs.io/v1/convai/conversation`, {
+                            method: 'POST',
+                            headers: { 'xi-api-key': elevenLabs.apiKey, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ agent_id: agent.agentId, user_input: text })
+                        });
+                        const json = await res.json();
+                        replyText = json.reply || json.response || 'Thank you for your message!';
+                    } catch (_) {
+                        replyText = 'Thank you! Our team will get back to you shortly.';
+                    }
+                } else {
+                    // Smart local fallback
+                    const lower = text.toLowerCase();
+                    if (agent.id === 'sales') {
+                        replyText = lower.includes('price') || lower.includes('cost') ? 'Our services start at ₹12,000. Would you like details on a specific package?' :
+                                    lower.includes('coaching') ? 'We offer Business, Life and Stress Management coaching. Which interests you?' :
+                                    lower.includes('book') || lower.includes('session') ? 'Great! Please go to our Contact page or call 9953715382 to book your session.' :
+                                    'Thank you for your interest! I\'d love to help. What service are you looking for?';
+                    } else if (agent.id === 'support') {
+                        replyText = lower.includes('refund') ? 'For refund requests please email thrivewithkaushik@gmail.com with your order ID.' :
+                                    lower.includes('order') ? 'Please share your Order ID and I\'ll look into it right away.' :
+                                    lower.includes('contact') ? 'You can reach us at 9953715382 or thrivewithkaushik@gmail.com' :
+                                    'I\'m here to help! Please describe your issue and I\'ll assist you.';
+                    } else {
+                        replyText = lower.includes('stress') ? 'Take a deep breath. Inhale for 4 counts, hold for 4, exhale for 4. How do you feel?' :
+                                    lower.includes('anxious') || lower.includes('anxiety') ? 'Acknowledge what you feel without judgment. You are safe. Would you like a grounding exercise?' :
+                                    lower.includes('happy') || lower.includes('good') ? 'Wonderful! 🌟 Gratitude amplifies positive energy. What are you grateful for today?' :
+                                    'I\'m here for you. Share what\'s on your mind and let\'s explore it together. 🙏';
+                    }
+                }
+
+                const agentMsg = { role: 'agent', text: replyText };
+                setMessages(p => ({ ...p, [agent.id]: [...(p[agent.id] || []), agentMsg] }));
+                // Auto-speak the response
+                speakText(replyText, agent);
+            };
+
+            const currentAgent = activeAgents.find(a => a.id === open);
+
+            return (
+                <>
+                    {/* Floating buttons */}
+                    <div className="ai-widget">
+                        {activeAgents.map(agent => (
+                            <button key={agent.id} className={`ai-btn ${open === agent.id ? '' : 'pulse'}`}
+                                style={{ background: agent.color }}
+                                title={agent.label}
+                                onClick={() => togglePanel(agent)}>
+                                {agent.label.split(' ')[0]}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Chat panel */}
+                    {currentAgent && (
+                        <div className="ai-panel">
+                            <div className="ai-panel-header" style={{ background: currentAgent.color }}>
+                                <span style={{ fontWeight: 700, fontSize: 15 }}>{currentAgent.label}</span>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button onClick={() => speakText((messages[currentAgent.id] || []).filter(m=>m.role==='agent').slice(-1)[0]?.text || currentAgent.greeting, currentAgent)}
+                                        style={{ background: 'rgba(255,255,255,.2)', border: 'none', borderRadius: 8, color: 'white', padding: '4px 10px', cursor: 'pointer', fontSize: 16 }}
+                                        title={speaking ? 'Stop' : 'Speak last message'}>
+                                        {speaking ? '⏹' : '🔊'}
+                                    </button>
+                                    <button onClick={() => setOpen(null)} style={{ background: 'rgba(255,255,255,.2)', border: 'none', borderRadius: 8, color: 'white', padding: '4px 10px', cursor: 'pointer', fontSize: 16 }}>✕</button>
+                                </div>
+                            </div>
+                            <div className="ai-panel-body">
+                                <div className="ai-messages" id={'msgs-' + currentAgent.id}>
+                                    {(messages[currentAgent.id] || []).map((m, i) => (
+                                        <div key={i} className={`ai-msg ${m.role}`}>{m.text}</div>
+                                    ))}
+                                </div>
+                                <div className="ai-input-row">
+                                    <input
+                                        placeholder="Type your message..."
+                                        value={inputs[currentAgent.id] || ''}
+                                        onChange={e => setInputs(p => ({ ...p, [currentAgent.id]: e.target.value }))}
+                                        onKeyDown={e => e.key === 'Enter' && sendMessage(currentAgent)}
+                                    />
+                                    <button style={{ background: currentAgent.color, color: 'white' }}
+                                        onClick={() => sendMessage(currentAgent)}>➤</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </>
+            );
+        };
+
+        /* ══════════════════════════════════════════════════════
+           AUTH MODAL
+        ══════════════════════════════════════════════════════ */
+        const AuthModal = () => {
+            const { setShowAuth, users, updateData, setCurrentUser } = useApp();
+            const [mode, setMode]   = useState('login');
+            const [showPwd, setSP]  = useState(false);
+            const [form, setForm]   = useState({ email:'', password:'', name:'', mobile:'' });
+            const [pwV, setPwV]     = useState({ isValid:false, msg:'' });
+            const [resetEmail, setRE] = useState('');
+            useEffect(() => { if (form.password) setPwV(validatePassword(form.password)); }, [form.password]);
+
+            const F = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+
+            const login = e => {
+                e.preventDefault();
+                const u = users.find(u => u.email === form.email && u.password === form.password);
+                u ? (setCurrentUser(u), setShowAuth(false), alert('✅ Welcome, ' + u.name + '!'))
+                  : alert('❌ Invalid email or password');
+            };
+            const register = e => {
+                e.preventDefault();
+                if (!pwV.isValid) { alert('❌ ' + pwV.msg); return; }
+                if (form.password !== form.confirm) { alert('❌ Passwords do not match'); return; }
+                if (users.find(u => u.email === form.email)) { alert('❌ Email already registered'); return; }
+                const nu = { id: Date.now(), name: form.name, email: form.email, mobile: form.mobile, password: form.password, createdAt: new Date().toISOString() };
+                updateData('users', [...users, nu]);
+                setCurrentUser(nu);
+                setShowAuth(false);
+                alert('✅ Account created! Welcome ' + nu.name);
+            };
+            const reset = e => {
+                e.preventDefault();
+                const u = users.find(u => u.email === resetEmail);
+                if (u) {
+                    const code = Math.floor(100000 + Math.random() * 900000);
+                    alert(`🔑 Reset code: ${code}\n\nSent to:\n📧 ${resetEmail}\n📱 ${u.mobile}\n\n(In production, real email/SMS is sent)`);
+                    setMode('login');
+                } else alert('❌ Email not registered');
+            };
+
+            return (
+                <div className="modal" onClick={() => setShowAuth(false)}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
+                        <button className="modal-close" onClick={() => setShowAuth(false)}>×</button>
+                        <div style={{ textAlign:'center', marginBottom:28 }}>
+                            <div style={{ fontSize:52, marginBottom:12 }}>{mode==='login'?'👤':mode==='register'?'📝':'🔑'}</div>
+                            <h2 style={{ fontSize:26 }}>{mode==='login'?'Welcome Back':mode==='register'?'Create Account':'Reset Password'}</h2>
+                        </div>
+
+                        {mode === 'login' && (
+                            <form onSubmit={login}>
+                                <div style={{ marginBottom:14 }}><input type="email" placeholder="Email address" value={form.email} onChange={F('email')} required /></div>
+                                <div style={{ marginBottom:20 }}>
+                                    <div className="pwd-container">
+                                        <input type={showPwd?'text':'password'} placeholder="Password" value={form.password} onChange={F('password')} required style={{ paddingRight:50 }} />
+                                        <button type="button" className="pwd-toggle" onClick={()=>setSP(!showPwd)}>{showPwd?'🙈':'👁️'}</button>
+                                    </div>
+                                </div>
+                                <button type="submit" className="btn bp" style={{ width:'100%', marginBottom:12 }}>🔐 Login Securely</button>
+                                <div style={{ textAlign:'center', fontSize:14, display:'flex', justifyContent:'space-between' }}>
+                                    <a href="#" onClick={e=>{e.preventDefault();setMode('reset')}} style={{ color:'var(--a)' }}>Forgot Password?</a>
+                                    <a href="#" onClick={e=>{e.preventDefault();setMode('register')}} style={{ color:'var(--p)', fontWeight:600 }}>Create Account →</a>
+                                </div>
+                            </form>
+                        )}
+
+                        {mode === 'register' && (
+                            <form onSubmit={register}>
+                                {[['name','Full Name','text'],['email','Email','email'],['mobile','Mobile Number','tel']].map(([k,ph,t])=>(
+                                    <div key={k} style={{ marginBottom:14 }}><input type={t} placeholder={ph} value={form[k]||''} onChange={F(k)} required /></div>
+                                ))}
+                                <div style={{ marginBottom:6 }}>
+                                    <div className="pwd-container">
+                                        <input type={showPwd?'text':'password'} placeholder="Password (9+ chars, A-Z, 0-9, !@#)" value={form.password} onChange={F('password')} required style={{ paddingRight:50 }} />
+                                        <button type="button" className="pwd-toggle" onClick={()=>setSP(!showPwd)}>{showPwd?'🙈':'👁️'}</button>
+                                    </div>
+                                    {form.password && <div style={{ fontSize:12, marginTop:5, color: pwV.isValid?'#16a34a':'#dc2626', fontWeight:600 }}>{pwV.msg}</div>}
+                                </div>
+                                <div style={{ marginBottom:20 }}><input type={showPwd?'text':'password'} placeholder="Confirm Password" value={form.confirm||''} onChange={F('confirm')} required /></div>
+                                <button type="submit" className="btn bp" style={{ width:'100%', marginBottom:12 }}>✅ Create Account</button>
+                                <div style={{ textAlign:'center', fontSize:14 }}><a href="#" onClick={e=>{e.preventDefault();setMode('login')}} style={{ color:'var(--p)' }}>← Back to Login</a></div>
+                            </form>
+                        )}
+
+                        {mode === 'reset' && (
+                            <form onSubmit={reset}>
+                                <p style={{ color:'#666', marginBottom:16, fontSize:14 }}>Enter your email to receive a 6-digit reset code via email & SMS.</p>
+                                <div style={{ marginBottom:20 }}><input type="email" placeholder="Your registered email" value={resetEmail} onChange={e=>setRE(e.target.value)} required /></div>
+                                <button type="submit" className="btn bp" style={{ width:'100%', marginBottom:12 }}>📧 Send Reset Code</button>
+                                <div style={{ textAlign:'center', fontSize:14 }}><a href="#" onClick={e=>{e.preventDefault();setMode('login')}} style={{ color:'var(--p)' }}>← Back to Login</a></div>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        /* ══════════════════════════════════════════════════════
+           CART MODAL
+        ══════════════════════════════════════════════════════ */
+        const CartModal = () => {
+            const { cart, setShowCart, removeFromCart, updateQty, setShowPay, currentUser, setShowAuth } = useApp();
+            const sub   = cart.reduce((s,i) => s + i.price * i.quantity, 0);
+            const ship  = sub >= 500 ? 0 : 40;
+            const total = sub + ship;
+
+            const checkout = () => {
+                if (!currentUser) { setShowCart(false); setShowAuth(true); return; }
+                setShowCart(false);
+                setShowPay(true);
+            };
+
+            return (
+                <div className="modal" onClick={() => setShowCart(false)}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <button className="modal-close" onClick={() => setShowCart(false)}>×</button>
+                        <h2 style={{ marginBottom:24 }}>🛒 Shopping Cart</h2>
+                        {cart.length === 0 ? (
+                            <div style={{ textAlign:'center', padding:'40px 0' }}>
+                                <div style={{ fontSize:64, marginBottom:16 }}>🛒</div>
+                                <p style={{ color:'#999' }}>Your cart is empty</p>
+                            </div>
+                        ) : (
+                            <>
+                                {cart.map(item => (
+                                    <div key={item.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 0', borderBottom:'1px solid #eee' }}>
+                                        <div>
+                                            <div style={{ fontWeight:600, marginBottom:4 }}>{item.title}</div>
+                                            <div style={{ color:'#666', fontSize:14 }}>₹{item.price.toLocaleString()} each</div>
+                                        </div>
+                                        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                                            <button onClick={() => updateQty(item.id,-1)} style={{ width:32,height:32,border:'1px solid #ddd',borderRadius:8,cursor:'pointer',background:'#f5f5f5',fontSize:18,display:'flex',alignItems:'center',justifyContent:'center' }}>−</button>
+                                            <span style={{ fontWeight:700, minWidth:24, textAlign:'center' }}>{item.quantity}</span>
+                                            <button onClick={() => updateQty(item.id,+1)} style={{ width:32,height:32,border:'1px solid #ddd',borderRadius:8,cursor:'pointer',background:'#f5f5f5',fontSize:18,display:'flex',alignItems:'center',justifyContent:'center' }}>+</button>
+                                            <button onClick={() => removeFromCart(item.id)} style={{ padding:'4px 12px',background:'#fee2e2',border:'none',borderRadius:8,color:'#dc2626',cursor:'pointer',fontSize:13,fontWeight:600 }}>Remove</button>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div style={{ marginTop:24, padding:20, background:'#f8f9fa', borderRadius:14 }}>
+                                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}><span>Subtotal</span><span>₹{sub.toLocaleString()}</span></div>
+                                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}><span>Shipping</span><span style={{ color: ship===0?'#16a34a':'inherit', fontWeight:600 }}>{ship===0?'FREE ✓':'₹'+ship}</span></div>
+                                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:20, fontWeight:900, borderTop:'2px solid #e0e0e0', paddingTop:12 }}>
+                                        <span>Total</span><span style={{ color:'var(--p)' }}>₹{total.toLocaleString()}</span>
+                                    </div>
+                                </div>
+                                <button className="btn bp" style={{ width:'100%', marginTop:20, fontSize:16 }} onClick={checkout}>
+                                    Proceed to Checkout →
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        /* ══════════════════════════════════════════════════════
+           PAYMENT MODAL
+        ══════════════════════════════════════════════════════ */
+        const PayModal = () => {
+            const { cart, setCart, setShowPay, currentUser, paymentGateways, orders, updateData, sendNotification } = useApp();
+            const [sel, setSel] = useState(null);
+            const sub   = cart.reduce((s,i) => s + i.price * i.quantity, 0);
+            const ship  = sub >= 500 ? 0 : 40;
+            const total = sub + ship;
+            const active = paymentGateways.filter(g => g.enabled);
+
+            const pay = () => {
+                if (!sel) { alert('❌ Select a payment method'); return; }
+                const order = { id: Date.now(), customerName: currentUser.name, customerEmail: currentUser.email, customerMobile: currentUser.mobile, items: cart, subtotal: sub, shipping: ship, total, paymentMethod: sel.name, status: 'paid', date: new Date().toISOString().split('T')[0] };
+                updateData('orders', [...orders, order]);
+                sendNotification(order);
+                setCart([]);
+                setShowPay(false);
+            };
+
+            return (
+                <div className="modal" onClick={() => setShowPay(false)}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <button className="modal-close" onClick={() => setShowPay(false)}>×</button>
+                        <h2 style={{ marginBottom:24 }}>💳 Select Payment</h2>
+                        <div style={{ background:'#f0fdf4', border:'2px solid #bbf7d0', borderRadius:14, padding:20, marginBottom:24, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                            <span style={{ fontSize:16, color:'#166534' }}>Amount to Pay</span>
+                            <span style={{ fontSize:28, fontWeight:900, color:'var(--p)' }}>₹{total.toLocaleString()}</span>
+                        </div>
+                        {active.length === 0 ? (
+                            <div style={{ padding:24, background:'#fff3cd', borderRadius:12, textAlign:'center', color:'#856404' }}>⚠️ No payment methods enabled. Admin → Payments to enable.</div>
+                        ) : (
+                            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:12, marginBottom:24 }}>
+                                {active.map(gw => (
+                                    <button key={gw.id} onClick={() => setSel(gw)} style={{ padding:16, border:`2px solid ${sel?.id===gw.id?'var(--p)':'#e0e0e0'}`, borderRadius:14, background: sel?.id===gw.id?'#f0fdf4':'white', cursor:'pointer', textAlign:'center', transition:'all .2s' }}>
+                                        <div style={{ fontSize:30, marginBottom:8 }}>{gw.icon}</div>
+                                        <div style={{ fontSize:13, fontWeight:600, color: sel?.id===gw.id?'var(--p)':'#555' }}>{gw.name}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        <button className="btn bp" style={{ width:'100%', fontSize:17, padding:18, opacity: !sel?.id ? .5 : 1 }} onClick={pay} disabled={!sel}>
+                            🔒 Pay ₹{total.toLocaleString()} Securely
+                        </button>
+                        <p style={{ textAlign:'center', fontSize:12, color:'#999', marginTop:12 }}>🔐 Encrypted & secure payment processing</p>
+                    </div>
+                </div>
+            );
+        };
+
+        /* ══════════════════════════════════════════════════════
+           ADMIN LOGIN
+        ══════════════════════════════════════════════════════ */
+        const AdminLogin = () => {
+            const { setAdminIn } = useApp();
+            const [showPwd,  setSP]   = useState(false);
+            const [showDemo, setSD]   = useState(false);
+            const [cred, setCred]     = useState({ id:'', pass:'' });
+
+            const login = e => {
+                e.preventDefault();
+                const valid = (cred.id === 'admin@thrivewithkaushik.com' || cred.id === '9953715382') && cred.pass === 'Admin@2024';
+                valid ? setAdminIn(true) : alert('❌ Invalid credentials');
+            };
+
+            return (
+                <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#1a472a,#0f2818)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+                    <div className="card" style={{ maxWidth:480, width:'100%' }}>
+                        <div style={{ textAlign:'center', marginBottom:32 }}>
+                            <div style={{ fontSize:72, marginBottom:16 }}>🔒</div>
+                            <h2 style={{ fontSize:30 }}>Admin Portal</h2>
+                            <p style={{ color:'#666', marginTop:6 }}>Secure dashboard access</p>
+                        </div>
+                        <form onSubmit={login}>
+                            <div style={{ marginBottom:16 }}>
+                                <input type="text" placeholder="Email or Mobile" value={cred.id} onChange={e=>setCred(p=>({...p,id:e.target.value}))} required autoComplete="off" />
+                            </div>
+                            <div style={{ marginBottom:24 }}>
+                                <div className="pwd-container">
+                                    <input type={showPwd?'text':'password'} placeholder="Password" value={cred.pass} onChange={e=>setCred(p=>({...p,pass:e.target.value}))} required style={{ paddingRight:50 }} autoComplete="new-password" />
+                                    <button type="button" className="pwd-toggle" onClick={()=>setSP(!showPwd)}>{showPwd?'🙈':'👁️'}</button>
+                                </div>
+                            </div>
+                            <button type="submit" className="btn bp" style={{ width:'100%', marginBottom:14, fontSize:16 }}>🔓 Login to Dashboard</button>
+                        </form>
+                        <button onClick={()=>setSD(!showDemo)} style={{ width:'100%', padding:'10px', background:'#f8f9fa', border:'1px solid #e0e0e0', borderRadius:10, cursor:'pointer', fontSize:14, color:'#555' }}>
+                            {showDemo?'🙈 Hide':'👁️ Show'} Demo Credentials
+                        </button>
+                        {showDemo && (
+                            <div style={{ marginTop:14, padding:14, background:'#fff3cd', borderRadius:10, fontSize:13, lineHeight:1.8 }}>
+                                <strong>Demo Access:</strong><br/>
+                                Email: admin@thrivewithkaushik.com<br/>
+                                Mobile: 9953715382<br/>
+                                Password: Admin@2024
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        /* ══════════════════════════════════════════════════════
+           ADMIN PANEL
+        ══════════════════════════════════════════════════════ */
+        const AdminPanel = () => {
+            const { setAdminIn, setIsAdmin, config, updateData, services, products, orders, enquiries, paymentGateways, enquiryTypes, users, elevenLabs } = useApp();
+            const [tab, setTab] = useState('dashboard');
+
+            const tabs = ['dashboard','services','products','orders','enquiries','users','social','payments','ai agents','settings'];
+
+            // Social helpers
+            const toggleSocial = name => updateData('config', { ...config, social: { ...config.social, [name]: { ...config.social[name], enabled: !config.social[name].enabled } } });
+            const setSocialUrl  = (name, url) => updateData('config', { ...config, social: { ...config.social, [name]: { ...config.social[name], url } } });
+
+            // Payment helpers
+            const toggleGW = id => updateData('paymentGateways', paymentGateways.map(g => g.id===id ? {...g, enabled:!g.enabled} : g));
+            const setGWKey = (id, k) => updateData('paymentGateways', paymentGateways.map(g => g.id===id ? {...g, apiKey:k} : g));
+
+            // Enquiry helpers
+            const [newEQ, setNewEQ] = useState('');
+            const addEQ = () => { if (newEQ.trim()) { updateData('enquiryTypes', [...enquiryTypes, newEQ.trim()]); setNewEQ(''); } };
+            const delEQ = t => updateData('enquiryTypes', enquiryTypes.filter(x => x !== t));
+
+            // Service helpers
+            const toggleSvc  = id => updateData('services', services.map(s => s.id===id ? {...s, enabled:!s.enabled} : s));
+            const setSvcMode = (id, mode) => updateData('services', services.map(s => s.id===id ? {...s, mode} : s));
+
+            // Product helpers
+            const toggleProd = id => updateData('products', products.map(p => p.id===id ? {...p, enabled:!p.enabled} : p));
+
+            // ElevenLabs helpers
+            const setELKey      = k  => updateData('elevenLabs', { ...elevenLabs, apiKey: k });
+            const toggleAgent   = id => updateData('elevenLabs', { ...elevenLabs, agents: elevenLabs.agents.map(a => a.id===id ? {...a, enabled:!a.enabled} : a) });
+            const setAgentField = (id, field, val) => updateData('elevenLabs', { ...elevenLabs, agents: elevenLabs.agents.map(a => a.id===id ? {...a, [field]:val} : a) });
+
+            // Settings helpers
+            const setCfg = (field, val) => updateData('config', { ...config, [field]: val });
+            const setContact = (field, val) => updateData('config', { ...config, contact: { ...config.contact, [field]: val } });
+
+            return (
+                <div style={{ display:'flex', minHeight:'100vh' }}>
+                    {/* Sidebar */}
+                    <div style={{ width:240, background:'#1a472a', color:'white', padding:'24px 16px', position:'sticky', top:0, height:'100vh', overflowY:'auto', flexShrink:0 }}>
+                        <div style={{ marginBottom:32, paddingLeft:8 }}>
+                            <div style={{ fontSize:28 }}>🌟</div>
+                            <div style={{ fontWeight:700, fontSize:16, marginTop:4 }}>Admin Panel</div>
+                        </div>
+                        {tabs.map(t => (
+                            <button key={t} onClick={() => setTab(t)} style={{ width:'100%', padding:'12px 14px', background: tab===t ? 'rgba(212,175,55,.2)' : 'transparent', border:'none', color:'white', textAlign:'left', cursor:'pointer', marginBottom:4, borderRadius:8, fontSize:14, textTransform:'capitalize', borderLeft: tab===t ? '3px solid #d4af37' : '3px solid transparent', fontWeight: tab===t ? 700 : 400 }}>
+                                {t}
+                            </button>
+                        ))}
+                        <button onClick={() => { setAdminIn(false); setIsAdmin(false); }} style={{ width:'100%', padding:'12px', background:'#dc2626', border:'none', color:'white', borderRadius:10, cursor:'pointer', marginTop:24, fontWeight:700, fontSize:14 }}>
+                            🚪 Logout
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div style={{ flex:1, padding:40, background:'#f5f7f9', overflowY:'auto' }}>
+                        <h1 style={{ fontSize:32, marginBottom:28, textTransform:'capitalize' }}>{tab}</h1>
+
+                        {/* DASHBOARD */}
+                        {tab==='dashboard' && (
+                            <div className="g3">
+                                {[['📦',orders.length,'#3b82f6','Orders'],['👤',users.length,'#8b5cf6','Customers'],['🎯',services.filter(s=>s.enabled).length,'#16a34a','Active Services'],['🛍️',products.filter(p=>p.enabled).length,'#f59e0b','Active Products'],['💬',enquiries.length,'#0ea5e9','Enquiries'],['💰',orders.reduce((s,o)=>s+o.total,0),'#dc2626','Total Revenue']].map(([icon,val,color,label]) => (
+                                    <div key={label} className="card" style={{ textAlign:'center' }}>
+                                        <div style={{ fontSize:44, marginBottom:12 }}>{icon}</div>
+                                        <div style={{ fontSize:36, fontWeight:900, color }}>{typeof val==='number'&&label.includes('Revenue') ? '₹'+val.toLocaleString() : val}</div>
+                                        <div style={{ color:'#666', marginTop:4 }}>{label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* SERVICES */}
+                        {tab==='services' && (
+                            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+                                {services.map(s => (
+                                    <div key={s.id} className="card" style={{ display:'flex', alignItems:'center', gap:20, flexWrap:'wrap' }}>
+                                        <img src={s.image} alt={s.title} style={{ width:80, height:60, objectFit:'cover', borderRadius:10, flexShrink:0 }} />
+                                        <div style={{ flex:1 }}>
+                                            <div style={{ fontWeight:700, fontSize:16 }}>{s.title}</div>
+                                            <div style={{ color:'#666', fontSize:13, marginTop:2 }}>₹{s.price.toLocaleString()}</div>
+                                        </div>
+                                        <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+                                            <select value={s.mode} onChange={e => setSvcMode(s.id, e.target.value)} style={{ width:'auto', padding:'8px 12px', fontSize:13 }}>
+                                                <option>Online</option>
+                                                <option>Offline</option>
+                                                <option>Both</option>
+                                            </select>
+                                            <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:13 }}>
+                                                <span>{s.enabled?'Enabled':'Disabled'}</span>
+                                                <div className={`tog ${s.enabled?'on':''}`} onClick={() => toggleSvc(s.id)}></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* PRODUCTS */}
+                        {tab==='products' && (
+                            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+                                {products.map(p => (
+                                    <div key={p.id} className="card" style={{ display:'flex', alignItems:'center', gap:20, flexWrap:'wrap' }}>
+                                        <img src={p.image} alt={p.title} style={{ width:80, height:60, objectFit:'cover', borderRadius:10 }} />
+                                        <div style={{ flex:1 }}>
+                                            <div style={{ fontWeight:700, fontSize:16 }}>{p.title}</div>
+                                            <div style={{ color:'#666', fontSize:13 }}>₹{p.price.toLocaleString()} · Stock: {p.stock}</div>
+                                        </div>
+                                        <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:13 }}>
+                                            <span>{p.enabled?'Enabled':'Disabled'}</span>
+                                            <div className={`tog ${p.enabled?'on':''}`} onClick={() => toggleProd(p.id)}></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* ORDERS */}
+                        {tab==='orders' && (
+                            <div className="card" style={{ overflowX:'auto' }}>
+                                <table>
+                                    <thead><tr><th>Order ID</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Date</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                        {orders.length===0 && <tr><td colSpan="7" style={{ textAlign:'center', color:'#999', padding:40 }}>No orders yet</td></tr>}
+                                        {orders.map(o => (
+                                            <tr key={o.id}>
+                                                <td style={{ fontWeight:700 }}>#{String(o.id).slice(-6)}</td>
+                                                <td><div style={{ fontWeight:600 }}>{o.customerName}</div><div style={{ fontSize:12, color:'#999' }}>{o.customerEmail}</div></td>
+                                                <td>{o.items?.length || 0} item(s)</td>
+                                                <td style={{ fontWeight:700, color:'var(--p)' }}>₹{o.total.toLocaleString()}</td>
+                                                <td>{o.paymentMethod}</td>
+                                                <td>{o.date}</td>
+                                                <td><span style={{ padding:'4px 10px', background:'#dcfce7', color:'#16a34a', borderRadius:20, fontSize:12, fontWeight:700 }}>{o.status}</span></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* ENQUIRIES */}
+                        {tab==='enquiries' && (
+                            <div>
+                                <div className="card" style={{ marginBottom:24 }}>
+                                    <h3 style={{ marginBottom:16 }}>Enquiry Type Manager</h3>
+                                    <div style={{ display:'flex', gap:10, marginBottom:20 }}>
+                                        <input placeholder="New enquiry type..." value={newEQ} onChange={e=>setNewEQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addEQ()} style={{ flex:1 }} />
+                                        <button className="btn bp" onClick={addEQ}>+ Add</button>
+                                    </div>
+                                    <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
+                                        {enquiryTypes.map(t => (
+                                            <span key={t} style={{ padding:'8px 14px', background:'#f0f4f0', borderRadius:20, fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
+                                                {t}
+                                                <button onClick={() => delEQ(t)} style={{ border:'none', background:'none', cursor:'pointer', color:'#dc2626', fontSize:16, lineHeight:1 }}>×</button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="card" style={{ overflowX:'auto' }}>
+                                    <h3 style={{ marginBottom:16 }}>All Enquiries</h3>
+                                    <table>
+                                        <thead><tr><th>Name</th><th>Email</th><th>Mobile</th><th>Type</th><th>Location</th><th>Date</th></tr></thead>
+                                        <tbody>
+                                            {enquiries.length===0 && <tr><td colSpan="6" style={{ textAlign:'center', color:'#999', padding:40 }}>No enquiries yet</td></tr>}
+                                            {enquiries.map(e => (
+                                                <tr key={e.id}>
+                                                    <td style={{ fontWeight:600 }}>{e.name}</td>
+                                                    <td>{e.email}</td>
+                                                    <td>{e.mobile}</td>
+                                                    <td><span style={{ padding:'3px 8px', background:'#e0f2fe', color:'#0369a1', borderRadius:10, fontSize:12 }}>{e.type}</span></td>
+                                                    <td>{e.location}</td>
+                                                    <td>{e.date}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* USERS */}
+                        {tab==='users' && (
+                            <div className="card" style={{ overflowX:'auto' }}>
+                                <table>
+                                    <thead><tr><th>Name</th><th>Email</th><th>Mobile</th><th>Joined</th></tr></thead>
+                                    <tbody>
+                                        {users.length===0 && <tr><td colSpan="4" style={{ textAlign:'center', color:'#999', padding:40 }}>No registered users yet</td></tr>}
+                                        {users.map(u => (
+                                            <tr key={u.id}>
+                                                <td style={{ fontWeight:600 }}>{u.name}</td>
+                                                <td>{u.email}</td>
+                                                <td>{u.mobile}</td>
+                                                <td>{u.createdAt?.split('T')[0]}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* SOCIAL */}
+                        {tab==='social' && (
+                            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+                                {Object.entries(config.social||{}).map(([name, v]) => (
+                                    <div key={name} className="card">
+                                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+                                            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                                                <span style={{ width:36, height:36, borderRadius:'50%', background:v.color, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:700, fontSize:14 }}>{v.icon}</span>
+                                                <span style={{ fontWeight:700, textTransform:'capitalize' }}>{v.label}</span>
+                                            </div>
+                                            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                                                <span style={{ fontSize:13, color:'#666' }}>{v.enabled?'Visible':'Hidden'}</span>
+                                                <div className={`tog ${v.enabled?'on':''}`} onClick={() => toggleSocial(name)}></div>
+                                            </div>
+                                        </div>
+                                        <input type="url" value={v.url} onChange={e => setSocialUrl(name, e.target.value)} placeholder={`${v.label} URL`} />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* PAYMENTS */}
+                        {tab==='payments' && (
+                            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+                                {paymentGateways.map(gw => (
+                                    <div key={gw.id} className="card">
+                                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                                            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                                                <span style={{ fontSize:28 }}>{gw.icon}</span>
+                                                <span style={{ fontWeight:700, fontSize:16 }}>{gw.name}</span>
+                                            </div>
+                                            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                                                <span style={{ fontSize:13, color:'#666' }}>{gw.enabled?'Enabled':'Disabled'}</span>
+                                                <div className={`tog ${gw.enabled?'on':''}`} onClick={() => toggleGW(gw.id)}></div>
+                                            </div>
+                                        </div>
+                                        {gw.enabled && (
+                                            <input type="text" placeholder={`${gw.name} API Key`} value={gw.apiKey||''} onChange={e => setGWKey(gw.id, e.target.value)} />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* AI AGENTS */}
+                        {tab==='ai agents' && (
+                            <div>
+                                <div className="card" style={{ marginBottom:24 }}>
+                                    <h3 style={{ marginBottom:6 }}>🎙️ ElevenLabs API Key</h3>
+                                    <p style={{ fontSize:13, color:'#666', marginBottom:14 }}>Get your key at elevenlabs.io → Profile → API Keys</p>
+                                    <div className="pwd-container">
+                                        <input type="password" placeholder="sk-..." value={elevenLabs.apiKey||''} onChange={e => setELKey(e.target.value)} style={{ paddingRight:50 }} />
+                                    </div>
+                                    {elevenLabs.apiKey && <div style={{ marginTop:8, fontSize:13, color:'#16a34a', fontWeight:600 }}>✓ API Key saved</div>}
+                                </div>
+
+                                {elevenLabs.agents.map(agent => (
+                                    <div key={agent.id} className="card" style={{ marginBottom:16, borderLeft:`4px solid ${agent.color}` }}>
+                                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                                            <div>
+                                                <div style={{ fontWeight:700, fontSize:16 }}>{agent.label}</div>
+                                                <div style={{ fontSize:12, color:'#999', marginTop:2 }}>Floating chat widget on website</div>
+                                            </div>
+                                            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                                                <span style={{ fontSize:13, color:'#666' }}>{agent.enabled?'Active':'Inactive'}</span>
+                                                <div className={`tog ${agent.enabled?'on':''}`} onClick={() => toggleAgent(agent.id)}></div>
+                                            </div>
+                                        </div>
+                                        {agent.enabled && (
+                                            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                                                <div>
+                                                    <label style={{ fontSize:13, fontWeight:600, display:'block', marginBottom:6 }}>Voice ID (ElevenLabs)</label>
+                                                    <input type="text" value={agent.voiceId||''} onChange={e => setAgentField(agent.id,'voiceId',e.target.value)} placeholder="JBFqnCBsd6RMkjVDRZzb" />
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize:13, fontWeight:600, display:'block', marginBottom:6 }}>Conversational Agent ID <span style={{ color:'#999', fontWeight:400' }}>(optional)</span></label>
+                                                    <input type="text" value={agent.agentId||''} onChange={e => setAgentField(agent.id,'agentId',e.target.value)} placeholder="agent_xxxxxxxxxxxx" />
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize:13, fontWeight:600, display:'block', marginBottom:6 }}>Greeting Message</label>
+                                                    <textarea rows="2" value={agent.greeting||''} onChange={e => setAgentField(agent.id,'greeting',e.target.value)} />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                                <div style={{ padding:20, background:'#eff6ff', borderRadius:14, marginTop:8, fontSize:13, color:'#1e40af' }}>
+                                    <strong>ℹ️ How it works:</strong><br/>
+                                    1. Add your ElevenLabs API Key above<br/>
+                                    2. Enable each agent you want (Sales, Support, Mindfulness)<br/>
+                                    3. Add Voice ID from ElevenLabs voice library<br/>
+                                    4. Optionally add Conversational Agent ID for AI responses<br/>
+                                    5. Customers see floating chat buttons on your website<br/>
+                                    6. Agent speaks replies using your ElevenLabs voice 🎙️
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SETTINGS */}
+                        {tab==='settings' && (
+                            <div className="g3">
+                                <div className="card">
+                                    <h3 style={{ marginBottom:20 }}>Site Information</h3>
+                                    {[['Site Name','siteName','text',config.siteName],['Blog URL','blogUrl','url',config.blogUrl]].map(([label,field,type,val])=>(
+                                        <div key={field} style={{ marginBottom:16 }}>
+                                            <label style={{ display:'block', fontWeight:600, marginBottom:8, fontSize:13 }}>{label}</label>
+                                            <input type={type} value={val||''} onChange={e=>setCfg(field,e.target.value)} />
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="card">
+                                    <h3 style={{ marginBottom:20 }}>Contact Details</h3>
+                                    <div style={{ marginBottom:16 }}>
+                                        <label style={{ display:'block', fontWeight:600, marginBottom:8, fontSize:13 }}>Mobile</label>
+                                        <input type="tel" value={config.contact.mobile||''} onChange={e=>setContact('mobile',e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display:'block', fontWeight:600, marginBottom:8, fontSize:13 }}>Email</label>
+                                        <input type="email" value={config.contact.email||''} onChange={e=>setContact('email',e.target.value)} />
+                                    </div>
+                                </div>
+                                <div className="card">
+                                    <h3 style={{ marginBottom:20 }}>Security Info</h3>
+                                    <div style={{ background:'#f0fdf4', borderRadius:12, padding:16, fontSize:13, lineHeight:2 }}>
+                                        <div>🔐 Data encrypted (Base64)</div>
+                                        <div>🔒 Passwords hidden by default</div>
+                                        <div>💪 Strong password required</div>
+                                        <div>🔑 Reset via email and SMS</div>
+                                        <div>🛡️ Admin credentials hidden</div>
+                                        <div>📊 All data stored locally</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        /* ══════════════════════════════════════════════════════
+           PUBLIC WEBSITE
+        ══════════════════════════════════════════════════════ */
+        const Website = () => {
+            const { config, page, setPage, cartCount, setShowCart, currentUser, setCurrentUser, setShowAuth, setIsAdmin } = useApp();
+            return (
+                <div>
+                    <header style={{ background:'white', boxShadow:'0 2px 12px rgba(0,0,0,.08)', position:'sticky', top:0, zIndex:500 }}>
+                        <div className="con" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 24px' }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer' }} onClick={() => setPage('home')}>
+                                <span style={{ fontSize:36 }}>{config.logo}</span>
+                                <h1 style={{ fontSize:22, lineHeight:1 }}>{config.siteName}</h1>
+                            </div>
+                            <nav style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                                {['Home','Services','Shop','Blog','Contact'].map(p => (
+                                    <button key={p} onClick={() => setPage(p.toLowerCase())} className="btn" style={{ padding:'10px 18px', background: page===p.toLowerCase() ? 'var(--p)' : '#f5f5f5', color: page===p.toLowerCase() ? 'white' : '#555', fontSize:14 }}>{p}</button>
+                                ))}
+                                {currentUser
+                                    ? <button className="btn bo" style={{ padding:'10px 18px', fontSize:14 }} onClick={() => { if(confirm('Logout?')) setCurrentUser(null); }}>👤 {currentUser.name}</button>
+                                    : <button className="btn bo" style={{ padding:'10px 18px', fontSize:14 }} onClick={() => setShowAuth(true)}>Login</button>
+                                }
+                                <button className="btn ba" style={{ padding:'10px 18px', fontSize:14, position:'relative' }} onClick={() => setShowCart(true)}>
+                                    🛒 Cart
+                                    {cartCount>0 && <span style={{ position:'absolute', top:-8, right:-8, background:'var(--s)', color:'var(--p)', width:22, height:22, borderRadius:'50%', fontSize:11, fontWeight:900, display:'flex', alignItems:'center', justifyContent:'center' }}>{cartCount}</span>}
+                                </button>
+                                <button onClick={() => setIsAdmin(true)} title="Admin" style={{ background:'none', border:'none', cursor:'pointer', opacity:.15, fontSize:20, padding:4 }}>⚙️</button>
+                            </nav>
+                        </div>
+                    </header>
+
+                    <main>
+                        {page==='home'     && <HomePage />}
+                        {page==='services' && <ServicesPage />}
+                        {page==='shop'     && <ShopPage />}
+                        {page==='blog'     && <BlogPage />}
+                        {page==='contact'  && <ContactPage />}
+                    </main>
+
+                    <footer style={{ background:'var(--p)', color:'white', padding:'56px 20px', marginTop:80, textAlign:'center' }}>
+                        <div className="con">
+                            <div style={{ fontSize:40, marginBottom:10 }}>{config.logo}</div>
+                            <h3 style={{ color:'white', fontSize:22, marginBottom:10 }}>{config.siteName}</h3>
+                            <p style={{ opacity:.9, marginBottom:4 }}>📞 {config.contact.mobile}</p>
+                            <p style={{ opacity:.9, marginBottom:20 }}>✉️ {config.contact.email}</p>
+                            <p style={{ opacity:.6, fontSize:13 }}>© 2024 {config.siteName}. All rights reserved.</p>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const HomePage = () => {
+            const { config, setPage } = useApp();
+            return (
+                <div>
+                    <section style={{ background:`linear-gradient(135deg,${config.colors.primary},#0f2818)`, color:'white', padding:'100px 20px', textAlign:'center' }}>
+                        <div className="con">
+                            <div style={{ fontSize:16, letterSpacing:4, textTransform:'uppercase', opacity:.8, marginBottom:16 }}>Welcome to</div>
+                            <h1 style={{ fontSize:56, color:'white', marginBottom:20, lineHeight:1.2 }}>Transform Your Life and Business</h1>
+                            <p style={{ fontSize:20, opacity:.9, marginBottom:40, maxWidth:600, margin:'0 auto 40px' }}>Expert coaching, motivational speaking and consulting services</p>
+                            <div style={{ display:'flex', gap:16, justifyContent:'center', flexWrap:'wrap' }}>
+                                <button className="btn bs" style={{ fontSize:16, padding:'16px 40px' }} onClick={() => setPage('services')}>Explore Services</button>
+                                <button className="btn" style={{ fontSize:16, padding:'16px 40px', background:'rgba(255,255,255,.15)', color:'white', border:'2px solid rgba(255,255,255,.4)' }} onClick={() => setPage('contact')}>Book a Session</button>
+                            </div>
+                        </div>
+                    </section>
+                    <section style={{ padding:'80px 20px' }}>
+                        <div className="con">
+                            <h2 style={{ textAlign:'center', fontSize:42, marginBottom:52 }}>Why Choose Us</h2>
+                            <div className="g3">
+                                {[['🎯','Expert Guidance','15+ years of transformational coaching experience'],['🏆','Proven Results','Thousands of lives and businesses transformed'],['💼','Tailored Approach','Every program customized to your unique needs'],['🌐','Online & Offline','Flexible modes to suit your lifestyle'],['🔒','Safe & Secure','Your data and privacy fully protected'],['📞','Always Available','Dedicated support before, during and after sessions']].map(([icon,title,desc],i) => (
+                                    <div key={i} className="card" style={{ textAlign:'center', padding:'36px 24px' }}>
+                                        <div style={{ fontSize:52, marginBottom:18 }}>{icon}</div>
+                                        <h3 style={{ fontSize:20, marginBottom:12 }}>{title}</h3>
+                                        <p style={{ color:'#666', lineHeight:1.6 }}>{desc}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            );
+        };
+
+        const ServicesPage = () => {
+            const { services, addToCart } = useApp();
+            return (
+                <div style={{ padding:'60px 20px' }}>
+                    <div className="con">
+                        <h1 style={{ fontSize:46, marginBottom:12, textAlign:'center' }}>Our Services</h1>
+                        <p style={{ textAlign:'center', color:'#666', fontSize:18, marginBottom:52 }}>Professional coaching programs tailored for you</p>
+                        <div className="g3">
+                            {services.filter(s => s.enabled).map(service => {
+                                const disc = Math.round((1 - service.price/service.originalPrice)*100);
+                                return (
+                                    <div key={service.id} className="card" style={{ padding:0, overflow:'hidden' }}>
+                                        <div style={{ position:'relative' }}>
+                                            <img src={service.image} alt={service.title} style={{ width:'100%', height:220, objectFit:'cover' }} />
+                                            <span style={{ position:'absolute', top:14, right:14, background:'var(--a)', color:'white', padding:'5px 12px', borderRadius:20, fontWeight:700, fontSize:13 }}>{disc}% OFF</span>
+                                            <span style={{ position:'absolute', top:14, left:14, background:'rgba(0,0,0,.6)', color:'white', padding:'5px 12px', borderRadius:20, fontSize:12 }}>
+                                                {service.mode==='Both'?'🌐 Online + 🏢 Offline':service.mode==='Online'?'🌐 Online':'🏢 Offline'}
+                                            </span>
+                                        </div>
+                                        <div style={{ padding:24 }}>
+                                            <h3 style={{ fontSize:22, marginBottom:8 }}>{service.title}</h3>
+                                            <p style={{ color:'#666', fontSize:14, marginBottom:18, lineHeight:1.6 }}>{service.description}</p>
+                                            <div style={{ marginBottom:20 }}>
+                                                <span style={{ textDecoration:'line-through', color:'#bbb', marginRight:10, fontSize:15 }}>₹{service.originalPrice.toLocaleString()}</span>
+                                                <span style={{ fontSize:30, fontWeight:900, color:'var(--p)' }}>₹{service.price.toLocaleString()}</span>
+                                            </div>
+                                            <button className="btn bp" style={{ width:'100%' }} onClick={() => addToCart(service)}>Add to Cart</button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ShopPage = () => {
+            const { products, addToCart } = useApp();
+            return (
+                <div style={{ padding:'60px 20px' }}>
+                    <div className="con">
+                        <h1 style={{ fontSize:46, marginBottom:12, textAlign:'center' }}>Shop</h1>
+                        <p style={{ textAlign:'center', color:'#666', fontSize:18, marginBottom:52 }}>Books, merchandise and tools to keep you thriving</p>
+                        <div className="g3">
+                            {products.filter(p => p.enabled).map(product => {
+                                const disc = Math.round((1 - product.price/product.originalPrice)*100);
+                                return (
+                                    <div key={product.id} className="card" style={{ padding:0, overflow:'hidden' }}>
+                                        <div style={{ position:'relative' }}>
+                                            <img src={product.image} alt={product.title} style={{ width:'100%', height:220, objectFit:'cover' }} />
+                                            <span style={{ position:'absolute', top:14, right:14, background:'var(--a)', color:'white', padding:'5px 12px', borderRadius:20, fontWeight:700, fontSize:13 }}>{disc}% OFF</span>
+                                        </div>
+                                        <div style={{ padding:24 }}>
+                                            <h3 style={{ fontSize:20, marginBottom:8 }}>{product.title}</h3>
+                                            <div style={{ fontSize:13, fontWeight:700, color: product.stock>10?'#16a34a':'#dc2626', marginBottom:14 }}>
+                                                {product.stock>10 ? '✓ In Stock' : `⚠️ Only ${product.stock} left`}
+                                            </div>
+                                            <div style={{ marginBottom:20 }}>
+                                                <span style={{ textDecoration:'line-through', color:'#bbb', marginRight:10 }}>₹{product.originalPrice.toLocaleString()}</span>
+                                                <span style={{ fontSize:26, fontWeight:900, color:'var(--p)' }}>₹{product.price.toLocaleString()}</span>
+                                            </div>
+                                            <button className="btn ba" style={{ width:'100%' }} onClick={() => addToCart(product)}>Add to Cart</button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const BlogPage = () => {
+            const { config } = useApp();
+            return (
+                <div style={{ padding:'60px 20px' }}>
+                    <div className="con">
+                        <h1 style={{ fontSize:46, marginBottom:12, textAlign:'center' }}>Blog & Insights</h1>
+                        <p style={{ textAlign:'center', color:'#666', fontSize:18, marginBottom:52 }}>Wisdom, inspiration and practical tools</p>
+                        <div className="card" style={{ textAlign:'center', padding:'72px 40px', maxWidth:600, margin:'0 auto' }}>
+                            <div style={{ fontSize:72, marginBottom:24 }}>📝</div>
+                            <h3 style={{ fontSize:28, marginBottom:16 }}>Visit Our Blog</h3>
+                            <p style={{ color:'#666', marginBottom:32, fontSize:17, lineHeight:1.7 }}>Read our latest articles, insights and coaching tips on Blogger</p>
+                            <a href={config.blogUrl} target="_blank" rel="noopener noreferrer" className="btn bp" style={{ textDecoration:'none', fontSize:16, padding:'16px 44px' }}>
+                                🔗 Visit Blog
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ContactPage = () => {
+            const { config, enquiryTypes, enquiries, updateData } = useApp();
+            const [form, setForm] = useState({ name:'', email:'', mobile:'', location:'', type:'', message:'' });
+            const F = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+            const submit = e => {
+                e.preventDefault();
+                updateData('enquiries', [...enquiries, { ...form, id:Date.now(), date:new Date().toISOString().split('T')[0] }]);
+                alert('✅ Message sent! We will contact you soon.');
+                setForm({ name:'', email:'', mobile:'', location:'', type:'', message:'' });
+            };
+            return (
+                <div style={{ padding:'60px 20px' }}>
+                    <div className="con" style={{ maxWidth:840 }}>
+                        <h1 style={{ fontSize:46, marginBottom:12, textAlign:'center' }}>Get In Touch</h1>
+                        <p style={{ textAlign:'center', color:'#666', fontSize:18, marginBottom:52 }}>We'd love to hear from you</p>
+                        <div className="card">
+                            <form onSubmit={submit}>
+                                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
+                                    <div>
+                                        <label style={{ display:'block', fontWeight:600, marginBottom:8, fontSize:14 }}>Full Name *</label>
+                                        <input type="text" value={form.name} onChange={F('name')} required />
+                                    </div>
+                                    <div>
+                                        <label style={{ display:'block', fontWeight:600, marginBottom:8, fontSize:14 }}>Email *</label>
+                                        <input type="email" value={form.email} onChange={F('email')} required />
+                                    </div>
+                                </div>
+                                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
+                                    <div>
+                                        <label style={{ display:'block', fontWeight:600, marginBottom:8, fontSize:14 }}>Mobile *</label>
+                                        <input type="tel" value={form.mobile} onChange={F('mobile')} required />
+                                    </div>
+                                    <div>
+                                        <label style={{ display:'block', fontWeight:600, marginBottom:8, fontSize:14 }}>Location *</label>
+                                        <input type="text" placeholder="City, Country" value={form.location} onChange={F('location')} required />
+                                    </div>
+                                </div>
+                                <div style={{ marginBottom:16 }}>
+                                    <label style={{ display:'block', fontWeight:600, marginBottom:8, fontSize:14 }}>Enquiry Type *</label>
+                                    <select value={form.type} onChange={F('type')} required>
+                                        <option value="">Select type...</option>
+                                        {enquiryTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </div>
+                                <div style={{ marginBottom:24 }}>
+                                    <label style={{ display:'block', fontWeight:600, marginBottom:8, fontSize:14 }}>Message *</label>
+                                    <textarea rows="5" value={form.message} onChange={F('message')} required />
+                                </div>
+                                <button type="submit" className="btn bp" style={{ width:'100%', fontSize:16 }}>📧 Send Message</button>
+                            </form>
+                        </div>
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginTop:24 }}>
+                            <div className="card" style={{ background:'#f0fdf4', padding:24 }}>
+                                <div style={{ fontSize:32, marginBottom:10 }}>📞</div>
+                                <div style={{ fontWeight:700, marginBottom:4 }}>Phone</div>
+                                <div style={{ color:'#166534' }}>{config.contact.mobile}</div>
+                            </div>
+                            <div className="card" style={{ background:'#eff6ff', padding:24 }}>
+                                <div style={{ fontSize:32, marginBottom:10 }}>✉️</div>
+                                <div style={{ fontWeight:700, marginBottom:4 }}>Email</div>
+                                <div style={{ color:'#1d4ed8' }}>{config.contact.email}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        /* ── BOOT ──────────────────────────────────────────── */
+        try {
+            ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+        } catch(err) {
+            document.getElementById('root').innerHTML = '<div style="padding:40px;font-family:sans-serif;"><h2 style="color:red">Boot Error</h2><pre>' + err.message + '</pre></div>';
+            console.error(err);
+        }
+    </script>
 </body>
 </html>
